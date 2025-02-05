@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::buffer::{BufferContents, Subbuffer};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo,
@@ -10,12 +10,12 @@ use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{
     Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
 };
+use vulkano::format::Format;
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageUsage};
-use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
+use vulkano::instance::Instance;
 use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
-use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
+use vulkano::pipeline::graphics::input_assembly::{InputAssemblyState, PrimitiveTopology};
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
@@ -25,71 +25,74 @@ use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::ShaderModule;
-use vulkano::swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
-use vulkano::sync::future::FenceSignalFuture;
-use vulkano::sync::{self, GpuFuture};
-use vulkano::{Validated, VulkanError};
-
+use vulkano::swapchain::{Surface, Swapchain};
 
 #[derive(BufferContents, Vertex)]
 #[repr(C)]
-struct MyVertex {
+pub struct MyVertex {
     #[format(R32G32_SFLOAT)]
-    position: [f32; 2],
+    pub position: [f32; 2],
 }
 
-pub fn select_physical_device(
-    instance: &Arc<Instance>,
-    surface: &Arc<Surface>,
-    device_extensions: &DeviceExtensions,
-) -> (Arc<PhysicalDevice>, u32) {
-    instance
-        .enumerate_physical_devices()
-        .expect("failed to enumerate physical devices")
-        .filter(|p| p.supported_extensions().contains(device_extensions))
-        .filter_map(|p| {
-            p.queue_family_properties()
-                .iter()
-                .enumerate()
-                .position(|(i, q)| {
-                    q.queue_flags.contains(QueueFlags::GRAPHICS)
-                        && p.surface_support(i as u32, surface).unwrap_or(false)
-                })
-                .map(|q| (p, q as u32))
-        })
-        .min_by_key(|(p, _)| match p.properties().device_type {
-            PhysicalDeviceType::DiscreteGpu => 0,
-            PhysicalDeviceType::IntegratedGpu => 1,
-            PhysicalDeviceType::VirtualGpu => 2,
-            PhysicalDeviceType::Cpu => 3,
-            _ => 4,
-        })
-        .expect("no device available")
-}
+// pub fn select_physical_device(
+//     instance: &Arc<Instance>,
+//     surface: &Arc<Surface>,
+//     device_extensions: &DeviceExtensions,
+// ) -> (Arc<PhysicalDevice>, u32) {
+//     instance
+//         .enumerate_physical_devices()
+//         .expect("failed to enumerate physical devices")
+//         .filter(|p| p.supported_extensions().contains(device_extensions))
+//         .filter_map(|p| {
+//             p.queue_family_properties()
+//                 .iter()
+//                 .enumerate()
+//                 .position(|(i, q)| {
+//                     q.queue_flags.contains(QueueFlags::GRAPHICS)
+//                         && p.surface_support(i as u32, surface).unwrap_or(false)
+//                 })
+//                 .map(|q| (p, q as u32))
+//         })
+//         .min_by_key(|(p, _)| match p.properties().device_type {
+//             PhysicalDeviceType::DiscreteGpu => 0,
+//             PhysicalDeviceType::IntegratedGpu => 1,
+//             PhysicalDeviceType::VirtualGpu => 2,
+//             PhysicalDeviceType::Cpu => 3,
+//             _ => 4,
+//         })
+//         .expect("no device available")
+// }
+//
+// pub fn get_device(
+//     physical_device: Arc<PhysicalDevice>,
+//     device_extensions: DeviceExtensions,
+// ) -> (Arc<Device>, Arc<Queue>) {
+//     let (device, mut queues) = Device::new(
+//         physical_device.clone(),
+//         DeviceCreateInfo {
+//             queue_create_infos: vec![QueueCreateInfo {
+//                 queue_family_index,
+//                 ..Default::default()
+//             }],
+//             enabled_extensions: device_extensions, // new
+//             ..Default::default()
+//         },
+//     )
+//     .expect("failed to create device");
+//
+//     (device, queues.next().unwrap())
+// }
 
-fn get_device(physical_device: Arc<PhysicalDevice>, device_extensions: DeviceExtensions) -> (Arc<Device>, Arc<Queue>) {
-    let (device, mut queues) = Device::new(
-        physical_device.clone(),
-        DeviceCreateInfo {
-            queue_create_infos: vec![QueueCreateInfo {
-                queue_family_index,
-                ..Default::default()
-            }],
-            enabled_extensions: device_extensions, // new
-            ..Default::default()
-        },
-    )
-        .expect("failed to create device");
+pub const COLOR_FORMAT: Format = Format::R8G8B8A8_SRGB;
 
-    (device, queues.next().unwrap())
-}
-
-fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Arc<RenderPass> {
+// fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Arc<RenderPass> {
+pub fn get_render_pass(device: Arc<Device>) -> Arc<RenderPass> {
     vulkano::single_pass_renderpass!(
         device,
         attachments: {
             color: {
-                format: swapchain.image_format(), // set the format the same as the swapchain
+                // format: swapchain.image_format(), // set the format the same as the swapchain
+                format: COLOR_FORMAT, // TODO we are going to hardcode this for now, quest 3 seems to support it
                 samples: 1,
                 load_op: Clear,
                 store_op: Store,
@@ -100,10 +103,10 @@ fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Arc<Render
             depth_stencil: {},
         },
     )
-        .unwrap()
+    .unwrap()
 }
 
-fn get_framebuffers(images: &[Arc<Image>], render_pass: Arc<RenderPass>) -> Vec<Arc<Framebuffer>> {
+pub fn get_framebuffers(images: &[Arc<Image>], render_pass: Arc<RenderPass>) -> Vec<Arc<Framebuffer>> {
     images
         .iter()
         .map(|image| {
@@ -115,12 +118,12 @@ fn get_framebuffers(images: &[Arc<Image>], render_pass: Arc<RenderPass>) -> Vec<
                     ..Default::default()
                 },
             )
-                .unwrap()
+            .unwrap()
         })
         .collect::<Vec<_>>()
 }
 
-fn get_pipeline(
+pub fn get_pipeline(
     device: Arc<Device>,
     vs: Arc<ShaderModule>,
     fs: Arc<ShaderModule>,
@@ -145,7 +148,7 @@ fn get_pipeline(
             .into_pipeline_layout_create_info(device.clone())
             .unwrap(),
     )
-        .unwrap();
+    .unwrap();
 
     let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
 
@@ -155,7 +158,10 @@ fn get_pipeline(
         GraphicsPipelineCreateInfo {
             stages: stages.into_iter().collect(),
             vertex_input_state: Some(vertex_input_state),
-            input_assembly_state: Some(InputAssemblyState::default()),
+            input_assembly_state: Some(InputAssemblyState {
+                topology: PrimitiveTopology::TriangleList,
+                ..Default::default()
+            }),
             viewport_state: Some(ViewportState {
                 viewports: [viewport].into_iter().collect(),
                 ..Default::default()
@@ -170,10 +176,10 @@ fn get_pipeline(
             ..GraphicsPipelineCreateInfo::layout(layout)
         },
     )
-        .unwrap()
+    .unwrap()
 }
 
-fn get_command_buffers(
+pub fn get_command_buffers(
     command_buffer_allocator: &StandardCommandBufferAllocator,
     queue: &Arc<Queue>,
     pipeline: &Arc<GraphicsPipeline>,
@@ -188,7 +194,7 @@ fn get_command_buffers(
                 queue.queue_family_index(),
                 CommandBufferUsage::MultipleSubmit,
             )
-                .unwrap();
+            .unwrap();
 
             builder
                 .begin_render_pass(
@@ -216,29 +222,33 @@ fn get_command_buffers(
         .collect()
 }
 
-fn get_swapchain(dimensions: [u32; 2], physical_device: Arc<vulkano::device::physical::PhysicalDevice>, device: Arc<vulkano::device::Device>, surface: Arc<vulkano::swapchain::Surface>) -> (Arc<vulkano::swapchain::Swapchain>,Vec<Arc<vulkano::image::Image>>) {
-    let caps = physical_device
-        .surface_capabilities(&surface, Default::default())
-        .expect("failed to get surface capabilities");
-
-    let composite_alpha = caps.supported_composite_alpha.into_iter().next().unwrap();
-    let image_format = physical_device
-        .surface_formats(&surface, Default::default())
-        .unwrap()[0]
-        .0;
-
-    Swapchain::new(
-        device.clone(),
-        surface,
-        vulkano::swapchain::SwapchainCreateInfo {
-            min_image_count: caps.min_image_count,
-            image_format,
-            image_extent: dimensions,
-            image_usage: ImageUsage::COLOR_ATTACHMENT,
-            composite_alpha,
-            ..Default::default()
-        },
-    )
-        .unwrap()
-}
-
+// fn get_swapchain(
+//     dimensions: [u32; 2],
+//     physical_device: Arc<PhysicalDevice>,
+//     device: Arc<Device>,
+//     surface: Arc<Surface>,
+// ) -> (Arc<Swapchain>, Vec<Arc<Image>>) {
+//     let caps = physical_device
+//         .surface_capabilities(&surface, Default::default())
+//         .expect("failed to get surface capabilities");
+//
+//     let composite_alpha = caps.supported_composite_alpha.into_iter().next().unwrap();
+//     let image_format = physical_device
+//         .surface_formats(&surface, Default::default())
+//         .unwrap()[0]
+//         .0;
+//
+//     Swapchain::new(
+//         device.clone(),
+//         surface,
+//         vulkano::swapchain::SwapchainCreateInfo {
+//             min_image_count: caps.min_image_count,
+//             image_format,
+//             image_extent: dimensions,
+//             image_usage: ImageUsage::COLOR_ATTACHMENT,
+//             composite_alpha,
+//             ..Default::default()
+//         },
+//     )
+//     .unwrap()
+// }
