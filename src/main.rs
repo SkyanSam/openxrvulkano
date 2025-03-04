@@ -149,7 +149,7 @@ fn main() {
         &openxr_objects.xr_instance,
         &openxr_session.session,
         &openxr_objects.xr_system_id,
-        &device
+        device.clone()
     );
     //
     // let frames_in_flight = images.len();

@@ -8,6 +8,9 @@ use std::sync::{Arc, OnceLock};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::{Device, Queue, QueueCreateInfo, QueueFamilyProperties, QueueFlags};
 use vulkano::{Version, VulkanLibrary, VulkanObject};
+use vulkano::image::{ImageCreateInfo, ImageUsage};
+use vulkano::image::sys::RawImage;
+use vulkano::sync::Sharing;
 
 static VULKAN_INSTANCE: OnceLock<Arc<VulkanLibrary>> = OnceLock::new();
 fn get_vulkan_lib() -> &'static Arc<VulkanLibrary> {
@@ -170,7 +173,7 @@ pub fn create_swapchain(
     xr_session: &openxr::Session<openxr::Vulkan>,
     xr_system_id: &openxr::SystemId,
     
-    device: &Device,
+    device: Arc<Device>,
 ) {
     // Now we need to find all the viewpoints we need to take care of! This is a
     // property of the view configuration type; in this example we use PRIMARY_STEREO,
@@ -184,9 +187,10 @@ pub fn create_swapchain(
     let view_count = views.len();
     // assert_eq!(views.len(), VIEW_COUNT as usize);
     assert_eq!(views[0], views[1]);
+    let (width, height) = (views[0].recommended_image_rect_width, views[0].recommended_image_rect_height);
 
     // Create a swapchain for the viewpoints! A swapchain is a set of texture buffers
-    // used for displaying to screen, typically this is a backbuffer and a front buffer,
+    // used for displaying to screen, typically this is a back buffer and a front buffer,
     // one for rendering data to, and one for displaying on-screen.
     // let resolution = vk::Extent2D {
     //     width: views[0].recommended_image_rect_width,
@@ -195,14 +199,14 @@ pub fn create_swapchain(
     let handle = xr_session
         .create_swapchain(&SwapchainCreateInfo {
             create_flags: SwapchainCreateFlags::EMPTY,
-            usage_flags: SwapchainUsageFlags::COLOR_ATTACHMENT | SwapchainUsageFlags::SAMPLED,
+            usage_flags: SwapchainUsageFlags::COLOR_ATTACHMENT | SwapchainUsageFlags::SAMPLED, // TODO check which usage flags to add/drop for rendering vertex buffers
             format: COLOR_FORMAT as i32 as _,
             // The Vulkan graphics pipeline we create is not set up for multisampling,
             // so we hardcode this to 1. If we used a proper multisampling setup, we
             // could set this to `views[0].recommended_swapchain_sample_count`.
             sample_count: 1,
-            width: views[0].recommended_image_rect_width,
-            height: views[0].recommended_image_rect_height,
+            width,
+            height,
             face_count: 1,
             array_size: view_count as u32,
             mip_count: 1,
@@ -210,6 +214,24 @@ pub fn create_swapchain(
         .expect("Problem when creating swapchain");
     
     let raw_images = handle.enumerate_images().unwrap();
+    let swapchain_buffers = raw_images.into_iter().map(|color_image| {
+        let image = unsafe {
+            let raw_image = RawImage::from_handle( // TODO update vulkano to 0.35.1 and use from_handle_borrowed instead
+                device.clone(),
+                Handle::from_raw(color_image),
+                ImageCreateInfo {
+                    format: COLOR_FORMAT,
+                    view_formats: vec![COLOR_FORMAT],
+                    extent: [width, height, 1],
+                    usage: ImageUsage::COLOR_ATTACHMENT.union(ImageUsage::SAMPLED),
+                    sharing: Sharing::Exclusive,
+                    ..Default::default()
+                }
+            ).unwrap();
+            
+        };
+        
+    });
 
     // let image_view = (device.fns().v1_0.create_image_view)(
     //     

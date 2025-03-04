@@ -9,6 +9,7 @@
   <component name="ChangeListManager">
     <list default="true" id="dd57695b-c96f-46c4-87ae-704502a31fbb" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/openxr_init.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/openxr_init.rs" afterDir="false" />
     </list>
@@ -100,11 +101,25 @@
       <workItem from="1738706668250" duration="10045000" />
       <workItem from="1738887390540" duration="238000" />
       <workItem from="1738894627468" duration="1394000" />
+      <workItem from="1740521978841" duration="3175000" />
+      <workItem from="1741127690484" duration="80000" />
+      <workItem from="1741127790656" duration="3777000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
